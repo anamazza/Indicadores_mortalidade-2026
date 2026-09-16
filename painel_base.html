@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Painel de Mortalidade 2026 · Maternidades Estratégicas · Saúde Materna e Neonatal</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
+<style>
+:root{
+  --verde-lima:#7CB342;
+  --verde-claro:#8FBC4E;
+  --verde-fiocruz:#279261;
+  --verde-esmeralda:#1B5F51;
+  --verde-profundo:#154A4B;
+  --indigo:#0A213D;
+  --indigo-escuro:#071830;
+  --mint:#EDF6EF;
+  --mint-card:#F6FBF7;
+  --branco:#FFFFFF;
+  --texto:#1D3229;
+  --texto-suave:#4E6A5C;
+  --alerta:#C0392B;
+  --ambar:#D68910;
+  --azul-meta:#2471A3;
+  --azul-ebserh:#2471A3;        /* pontos das unidades EBSERH no mapa */
+  --azul-ebserh-borda:#103B5E;
+  --azul-qualineo:#5FB0D9;      /* pontos das unidades QUALINEO 2026/2027 */
+  --azul-qualineo-borda:#1B6B8F;
+  --borda:#D8E8DC;
+  --sombra:0 2px 12px rgba(14,122,86,.10);
+  --sombra-alta:0 10px 28px rgba(10,33,61,.18);
+  /* rampa de mortalidade: mais escuro = maior (do creme ao vinho) */
+  --m1:#FBE9DA; --m2:#F5C4A1; --m3:#E8926B; --m4:#CF5A3F; --m5:#8C2A2A;
+  --sem-dado:#E4EBE5;
+  --radius:14px;
+  --largura:min(1220px, 100% - 2.6rem);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--mint); color:var(--texto);
+  font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0; line-height:1.16; letter-spacing:-.02em; text-wrap:balance}
+h1{font-size:clamp(1.75rem,1.1rem+2.4vw,2.8rem); font-weight:800}
+h2{font-size:clamp(1.3rem,1rem+1vw,1.72rem); font-weight:800}
+h3{font-size:1.04rem; font-weight:700}
+p{margin:0}
+a{color:var(--verde-fiocruz)}
+button{font:inherit; cursor:pointer}
+select,input[type=search]{
+  font:inherit; padding:.5rem .7rem; border:1.5px solid var(--borda); border-radius:10px;
+  background:var(--branco); color:var(--texto); max-width:100%;
+}
+select:focus-visible,input:focus-visible,button:focus-visible{outline:2.5px solid var(--verde-fiocruz); outline-offset:2px}
+.wrap{width:var(--largura); margin-inline:auto}
+.eyebrow{font-size:.68rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; color:var(--verde-fiocruz)}
+.suave{color:var(--texto-suave)}
+.mono{font-variant-numeric:tabular-nums}
+
+/* ---------------- hero (somente degradê de cores, sem foto) ---------------- */
+.hero{
+  background:
+    radial-gradient(1100px 520px at 88% 18%, rgba(39,146,97,.42) 0%, rgba(39,146,97,0) 60%),
+    radial-gradient(700px 380px at 70% 95%, rgba(124,179,66,.22) 0%, rgba(124,179,66,0) 65%),
+    linear-gradient(105deg, var(--indigo-escuro) 0%, var(--indigo) 46%, #0E3050 72%, var(--verde-profundo) 100%);
+  color:#F2F8F4; padding:3.6rem 0 3rem; position:relative; overflow:hidden;
+}
+.hero .eyebrow{color:var(--verde-lima)}
+.hero p.sub{margin-top:.9rem; max-width:60ch; color:#C9DCD0; font-size:1.02rem}
+.hero-blocos{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:1.1rem}
+.hero-blocos span{
+  background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.18);
+  border-radius:999px; padding:.22rem .8rem; font-size:.78rem; font-weight:700; color:#E3F0E7;
+}
+
+/* faixa de destaques abaixo do cabeçalho */
+.faixa-stats{
+  display:flex; gap:.8rem; flex-wrap:wrap;
+  margin-top:-1.3rem; position:relative; z-index:5;
+}
+.stat{
+  background:var(--branco); border:none;
+  border-radius:12px; padding:.55rem .95rem; min-width:130px; max-width:230px;
+  box-shadow:var(--sombra-alta);
+}
+.stat .num{font-size:1.35rem; font-weight:800; color:var(--verde-esmeralda); letter-spacing:-.02em}
+.stat .rot{font-size:.62rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--texto-suave)}
+.stat .sub{font-size:.68rem; color:var(--texto-suave); margin-top:-.1rem}
+
+/* ---------------- navegação — trilho lateral de ícones ---------------- */
+.trilho{
+  position:fixed; left:14px; top:50%; transform:translateY(-50%); z-index:1000;
+  display:flex; flex-direction:column; gap:8px;
+  background:rgba(255,255,255,.93); padding:9px; border-radius:28px;
+  box-shadow:var(--sombra-alta); backdrop-filter:blur(6px); border:1px solid var(--borda);
+}
+.trilho button{
+  position:relative; width:40px; height:40px; border-radius:50%; border:none;
+  background:transparent; color:var(--texto-suave);
+  display:grid; place-items:center; transition:background .15s, color .15s;
+}
+.trilho button svg{width:20px; height:20px}
+.trilho button:hover{background:var(--mint); color:var(--verde-esmeralda)}
+.trilho button.ativo{background:var(--verde-fiocruz); color:#FFF}
+.trilho button::after{
+  content:attr(data-rotulo); position:absolute; left:calc(100% + 10px); top:50%;
+  transform:translateY(-50%); background:var(--indigo); color:#FFF;
+  padding:.3rem .65rem; border-radius:8px; font-size:.76rem; font-weight:700; white-space:nowrap;
+  opacity:0; pointer-events:none; transition:opacity .15s;
+}
+.trilho button:hover::after,.trilho button:focus-visible::after{opacity:1}
+.stat-btn{cursor:pointer; text-align:left}
+.stat-btn:hover{background:var(--mint-card); border-color:var(--verde-fiocruz)}
+.stat-btn .num{color:var(--verde-fiocruz)}
+@media (max-width: 900px){
+  .trilho{
+    left:50%; top:auto; bottom:10px; transform:translateX(-50%);
+    flex-direction:row; border-radius:999px;
+  }
+  .trilho button::after{display:none}
+  body{padding-bottom:76px}
+}
+
+/* ---------------- seções e cards ---------------- */
+section{padding:2.4rem 0}
+.faixa-stats + section{padding-top:1.1rem}
+section:nth-of-type(even){background:var(--branco)}
+section:nth-of-type(even) .card,
+section:nth-of-type(even) .filtros-topo,
+section:nth-of-type(even) .bloco-filtro,
+section:nth-of-type(even) .acordeao{background:var(--mint-card)}
+section:nth-of-type(even) table.dados tbody tr:nth-child(odd){background:var(--branco)}
+.sec-head{margin-bottom:1.2rem}
+.sec-head p{max-width:70ch; margin-top:.35rem; color:var(--texto-suave)}
+.sec-head h2, .titulo-linha{display:flex; align-items:center; gap:1.1rem}
+.sec-head h2::after, .titulo-linha::after{
+  content:""; flex:1; min-width:56px; height:3px; border-radius:2px;
+  background:linear-gradient(90deg, var(--verde-fiocruz), rgba(39,146,97,.08));
+}
+.card{
+  background:var(--branco); border:none; border-radius:var(--radius);
+  box-shadow:var(--sombra); padding:1.15rem 1.25rem;
+}
+.card h3{display:flex; align-items:center; gap:.5rem; flex-wrap:wrap}
+.card .fonte{font-size:.72rem; color:var(--texto-suave); margin-top:.7rem}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:1.1rem}
+.grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:1.1rem}
+.grid-2 > *, .grid-3 > *, .pan-grid > *, .mapa-layout > *, .dossie-cards > *, .mapa-grid > *{min-width:0}
+.chip{
+  display:inline-flex; align-items:center; gap:.35rem;
+  border-radius:999px; padding:.22rem .7rem; font-size:.78rem; font-weight:700;
+  background:var(--mint); color:var(--verde-esmeralda); border:1px solid var(--borda);
+}
+.chip-prelim{background:#FFF6E0; color:#8A5A00; border-color:#F2D48A}
+
+/* ---------------- mapa SVG ---------------- */
+.mapa-grid{display:grid; grid-template-columns:1.45fr 1fr; gap:1.2rem; align-items:start}
+.mapa-svg-box{position:relative}
+.mapa-svg-box svg{width:100%; height:auto; display:block}
+.mapa-svg-box .t{cursor:pointer; stroke:#FFF; stroke-width:1; vector-effect:non-scaling-stroke; transition:opacity .15s}
+.mapa-svg-box .t:hover{opacity:.8; stroke:var(--verde-esmeralda); stroke-width:1.4}
+.sel-ano-comp{font:inherit; font-weight:800; color:var(--indigo); border:1.5px solid #C9DCCE;
+  border-radius:9px; padding:.15rem .5rem; background:#FFF; cursor:pointer}
+#mapaCompA .t, #mapaCompB .t{stroke:#4A5B52; stroke-width:.75; vector-effect:non-scaling-stroke}
+#mapaCompA .t:hover, #mapaCompB .t:hover{stroke:var(--indigo); stroke-width:1.6}
+
+/* tooltip do mapa */
+.tip-mapa{
+  position:fixed; z-index:5000; background:var(--indigo); color:#FFF;
+  padding:.6rem .85rem; border-radius:10px; font-size:.8rem; line-height:1.5;
+  max-width:310px; box-shadow:var(--sombra-alta); pointer-events:none;
+}
+.tip-mapa .tm-titulo{font-weight:800; font-size:.86rem}
+.tip-mapa .tm-valor{color:#F6C6A8; font-weight:700; margin-top:.1rem}
+.tip-mapa .tm-nd{color:#C9DCD0; font-size:.76rem}
+.tip-mapa ul{margin:.35rem 0 0; padding-left:1.05rem}
+.tip-mapa li{margin:.1rem 0}
+.tip-mapa .tm-sem{color:#B9CDC0; font-style:italic}
+.mapa-controles{display:flex; gap:.6rem; flex-wrap:wrap; margin-bottom:.9rem; align-items:center}
+.filtros-grid{display:flex; gap:.8rem 1rem; flex-wrap:wrap; align-items:end; margin-bottom:1rem}
+.filtro{display:flex; flex-direction:column; gap:.25rem; flex:1; min-width:160px; max-width:340px}
+.filtro > span{font-size:.66rem; font-weight:800; letter-spacing:.11em; text-transform:uppercase; color:var(--texto)}
+.filtro select{width:100%}
+.filtros-topo{background:var(--branco); border:none; border-radius:var(--radius); padding:.9rem 1.1rem; box-shadow:var(--sombra)}
+
+.mapa-layout{display:grid; grid-template-columns:215px 1fr 300px; gap:1.1rem; align-items:start}
+.col-eixos,.col-dir{display:flex; flex-direction:column; gap:1rem}
+.bloco-filtro{background:var(--branco); border:none; border-radius:var(--radius); padding:.85rem; box-shadow:var(--sombra)}
+.rotulo-bloco{display:block; font-size:.66rem; font-weight:800; letter-spacing:.11em; text-transform:uppercase; color:var(--texto); margin-bottom:.6rem}
+.lista-pills{display:flex; flex-direction:column; gap:.45rem}
+.lista-pills button{
+  display:flex; align-items:center; gap:.5rem; text-align:left;
+  border:1px solid var(--borda); background:var(--mint-card); color:var(--texto);
+  padding:.5rem .75rem; border-radius:12px; font-weight:700; font-size:.86rem; line-height:1.25;
+  transition:background .15s, color .15s;
+}
+.lista-pills button svg{width:17px; height:17px; flex:none}
+.lista-pills button:hover{background:var(--mint)}
+.lista-pills button.ativo{background:var(--indigo); color:#FFF; border-color:var(--indigo)}
+.lista-pills.pills-ind button.ativo{background:var(--verde-fiocruz); border-color:var(--verde-fiocruz)}
+.titulo-legenda{font-size:.9rem; margin-bottom:.6rem}
+.legenda-v{flex-direction:column; gap:.45rem; margin-top:0; align-items:flex-start}
+.nota-mapa{font-size:.8rem; line-height:1.55}
+.mapa-svg-box .sigla{pointer-events:none; font-weight:800}
+.seg{display:inline-flex; border:1.5px solid var(--borda); border-radius:10px; overflow:hidden; background:var(--branco); flex-wrap:wrap}
+.seg button{border:none; background:transparent; padding:.4rem .8rem; font-weight:700; font-size:.84rem; color:var(--texto-suave)}
+.seg button.ativo{background:var(--verde-fiocruz); color:#FFF}
+.legenda{display:flex; gap:.9rem; flex-wrap:wrap; margin-top:.8rem; font-size:.78rem; color:var(--texto-suave)}
+.legenda span{display:inline-flex; align-items:center; gap:.4rem}
+.legenda i{width:14px; height:14px; border-radius:4px; display:inline-block; border:1px solid rgba(0,0,0,.12)}
+.painel-lateral .num-grande{font-size:2.2rem; font-weight:800; letter-spacing:-.03em}
+.kpi-lista{display:flex; flex-direction:column; gap:.3rem; margin-top:.5rem; font-size:.86rem}
+.kpi{
+  display:flex; justify-content:space-between; align-items:baseline; gap:.8rem;
+  border-bottom:1px dashed var(--borda); padding-bottom:.22rem;
+}
+.kpi .v{font-weight:800; font-size:.92rem}
+.kpi .v small{font-weight:600; font-size:.72rem; color:var(--texto-suave)}
+
+/* ---------------- mapa Leaflet ---------------- */
+#mapaLeaflet{height:560px; border-radius:var(--radius); border:1px solid var(--borda); box-shadow:var(--sombra)}
+.leaflet-popup-content{font-family:inherit; font-size:.86rem; line-height:1.45}
+.pop-nome{font-weight:800; font-size:.92rem; margin-bottom:.15rem}
+.pop-btn{
+  display:inline-block; margin-top:.5rem; background:var(--verde-fiocruz); color:#FFF !important;
+  padding:.3rem .7rem; border-radius:8px; font-weight:700; text-decoration:none; font-size:.8rem;
+}
+.filtros-mapa{display:flex; gap:.6rem; flex-wrap:wrap; margin-bottom:.9rem; align-items:center}
+.toggle{display:inline-flex; align-items:center; gap:.45rem; font-size:.86rem; font-weight:600; color:var(--texto-suave); cursor:pointer}
+.toggle input{accent-color:var(--verde-fiocruz); width:17px; height:17px}
+
+/* ---------------- modal de gráfico ---------------- */
+.modal-graf{position:fixed; inset:0; z-index:4000; background:rgba(10,33,61,.55); display:grid; place-items:center; padding:1rem}
+.modal-caixa{
+  background:var(--branco); border-radius:var(--radius); box-shadow:var(--sombra-alta);
+  max-width:760px; width:100%; max-height:88vh; overflow:auto; padding:1.2rem 1.4rem; position:relative;
+}
+.modal-x{
+  position:absolute; top:.7rem; right:.8rem; border:none; background:var(--mint);
+  border-radius:50%; width:34px; height:34px; font-weight:800; color:var(--verde-esmeralda); cursor:pointer;
+}
+.modal-x:hover{background:var(--borda)}
+table.dados th.th-ano{cursor:pointer; padding:.3rem .3rem}
+.btn-ano{
+  border:none; cursor:pointer; background:var(--verde-fiocruz); color:#FFF;
+  border-radius:999px; padding:.18rem .62rem; font:inherit; font-size:.72rem;
+  font-weight:800; letter-spacing:.04em; white-space:nowrap;
+}
+.btn-ano:hover{background:var(--verde-esmeralda); transform:translateY(-1px)}
+table.tab-verde thead .btn-ano{background:rgba(255,255,255,.92); color:var(--verde-esmeralda)}
+table.tab-verde thead .btn-ano:hover{background:#FFF}
+
+/* ---------------- dossiê: um seletor por grupo ---------------- */
+.dossie-conjuntos{display:grid; gap:1.05rem}
+.dossie-conj{background:var(--mint-card); border:1px solid var(--borda); border-radius:14px; padding:.85rem 1rem}
+.rot-conj{display:flex; align-items:center; gap:.5rem; margin:0 0 .55rem;
+  font-size:.82rem; font-weight:800; letter-spacing:.02em; color:var(--verde-esmeralda)}
+.rot-conj b{font-weight:800; color:var(--texto-suave)}
+.bolinha{width:.72rem; height:.72rem; border-radius:50%; flex:none; display:inline-block}
+.bola-apoiada{background:var(--verde-fiocruz); box-shadow:0 0 0 2px var(--verde-profundo) inset}
+.bola-ebserh{background:var(--azul-ebserh); box-shadow:0 0 0 2px var(--azul-ebserh-borda) inset}
+.bola-qualineo{background:var(--azul-qualineo); box-shadow:0 0 0 2px var(--azul-qualineo-borda) inset}
+.legenda-pontos{display:flex; flex-wrap:wrap; gap:.9rem; margin:.15rem 0 .9rem; font-size:.8rem}
+.legenda-pontos span.item{display:flex; align-items:center; gap:.4rem}
+
+/* ---------------- página do dossiê (sobreposta) ---------------- */
+.pagina-dossie{position:fixed; inset:0; z-index:3000; overflow:auto; background:var(--mint); overscroll-behavior:contain}
+.pagina-dossie .wrap{width:min(1560px, 100% - 2.6rem)}
+.pd-topo{position:sticky; top:0; z-index:20; background:rgba(255,255,255,.95); border-bottom:1px solid var(--borda); padding:.65rem 0; backdrop-filter:blur(8px)}
+.pd-topo-linha{display:flex; gap:1rem; align-items:center; justify-content:space-between; flex-wrap:wrap}
+.acordeao{
+  background:var(--branco); border:none; border-radius:12px;
+  padding:.15rem 1rem; margin-bottom:1rem; box-shadow:var(--sombra);
+}
+.acordeao summary{
+  cursor:pointer; font-weight:700; padding:.6rem 0; color:var(--verde-esmeralda);
+  list-style:none; display:flex; align-items:center; gap:.55rem; font-size:.92rem;
+}
+.acordeao summary::-webkit-details-marker{display:none}
+.acordeao summary::before{content:"▸"; color:var(--verde-fiocruz); transition:transform .18s; font-size:.9rem}
+.acordeao[open] summary::before{transform:rotate(90deg)}
+.acordeao > p{padding:0 0 .9rem; color:var(--texto-suave); max-width:none}
+.acordeao-corpo{padding:.3rem 0 1rem}
+.acordeao-mapa summary{font-size:1rem; padding:.75rem 0}
+
+.chip-acao{background:var(--verde-fiocruz); color:#FFF; border-color:var(--verde-fiocruz); cursor:pointer}
+.chip-acao:hover{background:var(--verde-esmeralda)}
+body.dossie-aberto{overflow:hidden}
+
+/* ---------------- dossiê ---------------- */
+.dossie-topo{
+  background:linear-gradient(135deg, var(--verde-profundo), var(--verde-esmeralda));
+  color:#F1F8F3; border-radius:var(--radius); padding:1.4rem 1.5rem; box-shadow:var(--sombra-alta);
+  display:grid; grid-template-columns:1fr auto; gap:1rem; align-items:center;
+}
+.dossie-topo .meta{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.6rem}
+.dossie-topo .meta span{background:rgba(255,255,255,.13); border-radius:999px; padding:.2rem .7rem; font-size:.78rem; font-weight:700}
+.dossie-topo .meta span.anexo{background:#F6C6A8; color:#5A2A12}
+.kpis-topo{display:grid; grid-template-columns:repeat(4, auto); gap:.6rem}
+.kpis-topo .k{background:rgba(255,255,255,.12); border-radius:10px; padding:.45rem .8rem; min-width:118px; text-align:right}
+.kpis-topo .k .n{font-size:1.35rem; font-weight:800; letter-spacing:-.02em; color:#FFF; line-height:1.1}
+.kpis-topo .k .t{font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:#C5E3CC; font-weight:700}
+.kpis-topo .k .s{font-size:.72rem; color:#E3F0E7}
+.dossie-cards{display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; margin-top:1.1rem}
+.dossie-cards .full{grid-column:1 / -1}
+.tab-wrap{overflow-x:auto}
+table.dados{border-collapse:collapse; width:100%; font-size:.83rem}
+table.dados th,table.dados td{padding:.34rem .55rem; text-align:right; white-space:nowrap}
+table.dados th{font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--texto-suave); border-bottom:2px solid var(--borda)}
+table.dados td:first-child,table.dados th:first-child{text-align:left}
+table.dados td.rot-click{cursor:pointer}
+table.dados td.rot-click:hover{text-decoration:underline dotted; color:var(--verde-esmeralda, #279261)}
+.btn-baixar-png{margin-top:.5rem; padding:.28rem .7rem; font-size:.78rem; font-weight:700; border:1.5px solid var(--verde-esmeralda, #279261); border-radius:99px; background:#FFF; color:var(--verde-esmeralda, #279261); cursor:pointer}
+.btn-baixar-png:hover{background:var(--verde-esmeralda, #279261); color:#FFF}
+table.dados tbody tr:nth-child(odd){background:var(--mint-card)}
+table.dados tr.total td{font-weight:800; border-top:2px solid var(--borda)}
+
+/* tabela no estilo da apresentação (cabeçalho verde) */
+table.dados.tab-verde th{
+  background:var(--verde-esmeralda); color:#FFF; text-transform:none; letter-spacing:0;
+  font-size:.8rem; font-weight:700; border-bottom:none; padding:.45rem .6rem;
+}
+table.dados.tab-verde th:first-child{border-radius:8px 0 0 0}
+table.dados.tab-verde th:last-child{border-radius:0 8px 0 0}
+table.dados.tab-verde tr.pct td{font-style:italic; font-weight:700}
+table.dados.tab-verde tr.taxa td{font-weight:800; color:var(--verde-esmeralda)}
+table.dados.tab-verde tr.total td{background:var(--mint)}
+/* tabelas n | % (uma dupla de colunas por ano, como na apresentação) */
+table.dados.tab-npct th.sub{font-size:.68rem; font-weight:600; background:var(--verde-profundo); padding:.25rem .45rem; border-radius:0 !important}
+table.dados.tab-npct td.p{color:var(--texto-suave); font-style:italic; padding-left:.2rem; border-right:1px solid var(--borda)}
+table.dados.tab-npct td.n{padding-right:.25rem}
+table.dados.tab-npct th.par{border-right:1px solid rgba(255,255,255,.35)}
+
+/* ---------------- comparador ---------------- */
+.comp-sel{display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem}
+.comp-chips{display:flex; gap:.5rem; flex-wrap:wrap}
+.comp-chips .chip button{border:none; background:transparent; color:inherit; font-weight:800; padding:0 .1rem}
+.comp-grid{overflow-x:auto}
+table.comp{border-collapse:collapse; width:100%; font-size:.86rem}
+table.comp th,table.comp td{padding:.5rem .65rem; text-align:right; border-bottom:1px solid var(--borda)}
+table.comp th{position:sticky; top:0; background:var(--branco)}
+table.comp td:first-child,table.comp th:first-child{text-align:left; font-weight:600}
+table.comp tr.grupo td{background:var(--mint); font-weight:800; color:var(--verde-esmeralda); font-size:.78rem; letter-spacing:.06em; text-transform:uppercase}
+table.comp .melhor{background:#E4F3E8; font-weight:800; border-radius:6px}
+.chip-ano{cursor:pointer}
+.chip-ano.ativo{background:var(--verde-fiocruz); color:#FFF; border-color:var(--verde-fiocruz)}
+.var-click{cursor:pointer; text-decoration:underline dotted 1.5px; text-underline-offset:3px}
+.var-click:hover{background:var(--mint)}
+.var-ok{color:var(--verde-fiocruz); font-weight:800}
+.var-ruim{color:var(--alerta); font-weight:800}
+.var-neutra{color:var(--texto-suave); font-weight:700}
+
+/* ---------------- gráficos SVG ---------------- */
+.graf{width:100%; height:auto; display:block}
+.graf text{font-family:inherit}
+
+/* ---------------- rodapé ---------------- */
+footer{background:var(--indigo); color:#B9CDC0; font-size:.82rem; padding:1.6rem 0; margin-top:3rem}
+footer a{color:var(--verde-lima)}
+
+@media (min-width: 901px){
+  body{padding-left:76px}
+  .hero{padding-left:0}
+}
+@media (max-width: 1080px){
+  .mapa-layout{grid-template-columns:1fr}
+  .col-eixos{flex-direction:row; flex-wrap:wrap}
+  .col-eixos .bloco-filtro{flex:1; min-width:220px}
+  .lista-pills{flex-direction:row; flex-wrap:wrap}
+  .kpis-topo{grid-template-columns:repeat(2, auto)}
+}
+@media (max-width: 900px){
+  .hero-grid,.mapa-grid,.grid-2,.grid-3,.dossie-cards{grid-template-columns:1fr}
+  .dossie-topo{grid-template-columns:1fr}
+  .kpis-topo .k{text-align:left}
+  #mapaLeaflet{height:440px}
+}
+@media print{
+  .navbar,.mapa-controles,.filtros-mapa,.trilho,footer{display:none !important}
+  body{padding-left:0 !important; background:#FFF}
+  body.dossie-aberto{overflow:visible}
+  body.dossie-aberto > *:not(#paginaDossie){display:none !important}
+  .pagina-dossie{position:static !important; overflow:visible !important; background:#FFF}
+  .pd-topo{display:none !important}
+  .card{break-inside:avoid; box-shadow:none}
+}
+
+/* ---------------- ficha CNES ---------------- */
+.cnes-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:.75rem 1.3rem; margin-top:.8rem}
+.cnes-item span{display:block; font-size:.62rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--texto-suave)}
+.cnes-item b{font-size:.92rem; font-weight:700}
+.badges{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.9rem}
+.badge-sim{background:#E4F3E8; color:var(--verde-esmeralda); border:1px solid #BFE3CB; border-radius:999px; padding:.22rem .75rem; font-size:.78rem; font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- ========================= HERO ========================= -->
+<header class="hero" id="inicio">
+  <div class="wrap">
+    <div style="display:flex; align-items:center; justify-content:flex-start; gap:16px 40px; flex-wrap:wrap; margin-bottom:16px">
+      <div style="font-size:.82rem; font-weight:600; letter-spacing:.4px; color:rgba(255,255,255,.92); text-transform:uppercase; line-height:1.5; max-width:430px">Coordenação de Ações Nacionais e de Cooperação em Saúde da Mulher, da Criança e do Adolescente</div>
+      <img src="logos_institucionais.png" alt="IFF · Fiocruz · SUS · Ministério da Saúde" style="width:min(380px,100%); height:auto"/>
+    </div>
+    <p class="eyebrow">Painel de Indicadores · Mortalidade Materna, Fetal, Perinatal e Neonatal · 2019 a 2025</p>
+    <h1 style="margin-top:.6rem">Qualificação do Modelo de Gestão em Maternidades Estratégicas</h1>
+    <p class="sub">Rede de Atenção à Saúde Materna e Neonatal · óbitos ocorridos nas maternidades segundo o SIM (declarações de óbito e de óbito fetal) e nascidos vivos do SINASC, 2019 a 2025, com cadastro CNES e localização das unidades.</p>
+    <div class="hero-blocos">
+      <span>Mortalidade materna</span><span>Mortalidade fetal</span><span>Mortalidade perinatal</span><span>Mortalidade neonatal</span>
+    </div>
+  </div>
+</header>
+
+<!-- faixa de destaques, separada do cabeçalho -->
+<div class="wrap faixa-stats">
+  <div class="stat"><div class="num" id="statMats">—</div><div class="rot">Maternidades</div></div>
+  <div class="stat"><div class="num" id="statUFs">—</div><div class="rot">Estados</div></div>
+  <div class="stat"><div class="num" id="statNV">—</div><div class="rot">Nascidos vivos 2025</div></div>
+  <div class="stat"><div class="num" id="statMat">—</div><div class="rot">Óbitos maternos 2025</div><div class="sub" id="statMatSub"></div></div>
+  <div class="stat"><div class="num" id="statNeo">—</div><div class="rot">Óbitos neonatais 2025</div><div class="sub" id="statNeoSub"></div></div>
+  <button class="stat stat-btn" id="btnMetodologia" title="Como cada número é calculado">
+    <div class="num" style="font-size:1.5rem">ⓘ</div><div class="rot">Metodologia</div>
+  </button>
+</div>
+
+<!-- ========================= NAV (trilho lateral de ícones) ========================= -->
+<nav class="trilho" id="trilho" aria-label="Navegação do painel"></nav>
+
+<!-- ========================= MAPA SVG ========================= -->
+<section id="secMapa">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Território</p>
+      <h2>Mapa do Brasil: mortalidade nas maternidades estratégicas por território</h2>
+      <p>Escolha o bloco e o indicador, alterne o nível territorial e toque em um estado para dar zoom e filtrar o painel · toque novamente para desfazer. Os valores de cada território agregam as maternidades do painel ali localizadas.</p>
+    </div>
+    <div class="filtros-grid filtros-topo">
+      <label class="filtro"><span>Território</span>
+        <select id="selRegiaoMapa">
+          <option value="">Brasil</option>
+          <option>Norte</option><option>Nordeste</option><option>Centro-Oeste</option>
+          <option>Sudeste</option><option>Sul</option>
+        </select></label>
+      <label class="filtro"><span>Estado</span>
+        <select id="selUFMapa"><option value="">Todo o Brasil</option></select></label>
+      <label class="filtro"><span>Detalhe do mapa</span>
+        <select id="selNivelMapa">
+          <option value="uf">Estados (UF)</option>
+          <option value="macro">Macrorregiões de saúde</option>
+          <option value="rs">Regiões de saúde</option>
+        </select></label>
+      <label class="filtro"><span>Ano</span>
+        <select id="selAnoMapa"></select></label>
+      <button class="chip" id="btnResetMapa" hidden>✕ limpar seleção</button>
+    </div>
+    <div class="mapa-layout">
+      <div class="col-eixos">
+        <div class="bloco-filtro">
+          <span class="rotulo-bloco">Bloco</span>
+          <div class="lista-pills" id="listaEixosMapa"></div>
+        </div>
+        <div class="bloco-filtro">
+          <span class="rotulo-bloco">Indicador</span>
+          <div class="lista-pills" id="listaIndsMapa"></div>
+        </div>
+      </div>
+      <div class="card mapa-svg-box"><div id="mapaSvg"></div></div>
+      <div class="col-dir">
+        <div class="card"><h4 class="titulo-legenda" id="tituloLegenda">—</h4><div class="legenda legenda-v" id="legendaMapa"></div><p class="nota-mapa suave" id="descIndMapa" style="font-size:.76rem; margin-top:.6rem"></p></div>
+        <div class="card painel-lateral" id="painelSelecao"></div>
+        <p class="nota-mapa suave" style="font-size:.74rem">Faixas por quintis dos territórios visíveis (mais escuro = maior mortalidade). Cinza: sem maternidade do painel ou sem óbitos/denominador no período. Taxas de territórios com poucos nascimentos oscilam muito: leia junto com o número absoluto.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= MAPA LEAFLET ========================= -->
+<section id="secUnidades">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Unidades</p>
+      <h2>Mapa de unidades: localização das maternidades</h2>
+    </div>
+    <details class="acordeao acordeao-mapa" id="detUnidades">
+      <summary>Mapa de unidades · toque para abrir</summary>
+      <div class="acordeao-corpo">
+        <p class="suave" style="margin-bottom:.55rem">Toque em um ponto para ver o resumo de mortalidade de 2025 e abrir o dossiê. Ative "mostrar demais estabelecimentos" para ver os pontos de contexto (≥480 partos/ano, SIH/AIH 2025), em cinza.</p>
+        <p class="legenda-pontos">
+          <span class="item"><span class="bolinha bola-apoiada"></span>maternidades apoiadas (estratégicas)</span>
+          <span class="item"><span class="bolinha bola-ebserh"></span>unidades EBSERH</span>
+          <span class="item"><span class="bolinha bola-qualineo"></span>QUALINEO 2026/2027</span>
+          <span class="item"><span class="bolinha" style="background:#AEBFB4; box-shadow:0 0 0 2px #7A8C80 inset"></span>demais estabelecimentos</span>
+        </p>
+        <div class="filtros-mapa">
+          <select id="selRegiaoLeaflet"><option value="">Todas as regiões</option></select>
+          <select id="selUFLeaflet"><option value="">Todos os estados</option></select>
+          <input type="search" id="buscaUnidade" placeholder="Buscar maternidade…" style="flex:1; min-width:190px"/>
+          <label class="toggle"><input type="checkbox" id="chkContexto"/> mostrar demais estabelecimentos (≥480 partos)</label>
+          <button class="chip" id="btnLimparUnidades">✕ limpar</button>
+        </div>
+        <div id="mapaLeaflet"></div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ========================= DOSSIÊ (abre página própria) ========================= -->
+<section id="secDossie">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Dossiê da unidade</p>
+      <h2>Escolha uma maternidade para abrir o dossiê completo</h2>
+      <p style="max-width:none">O dossiê abre em página própria com todas as seções da apresentação de indicadores de mortalidade: identificação, ficha de cadastro CNES e habilitações ativas, razão de mortalidade materna e causas obstétricas, mortalidade fetal, perinatal e neonatal (taxas, faixa de peso, momento do óbito, grupos de causas e causas evitáveis). Em qualquer tabela, toque em um ano para ver o gráfico daquele ano ou no nome da linha para ver a evolução, e você pode baixar o dossiê em PDF.</p>
+    </div>
+    <div class="dossie-conjuntos">
+      <div class="dossie-conj">
+        <p class="rot-conj"><span class="bolinha bola-apoiada"></span>Maternidades apoiadas (estratégicas) <b id="nApoiada"></b></p>
+        <div class="mapa-controles">
+          <select id="selUnidade" style="min-width:340px"></select>
+          <button class="chip chip-acao" id="btnAbrirDossie">Abrir dossiê →</button>
+        </div>
+      </div>
+      <div class="dossie-conj">
+        <p class="rot-conj"><span class="bolinha bola-ebserh"></span>Unidades EBSERH <b id="nEbserh"></b></p>
+        <div class="mapa-controles">
+          <select id="selUnidadeEbserh" style="min-width:340px"></select>
+          <button class="chip chip-acao" id="btnAbrirDossieEbserh">Abrir dossiê →</button>
+        </div>
+      </div>
+      <div class="dossie-conj">
+        <p class="rot-conj"><span class="bolinha bola-qualineo"></span>QUALINEO 2026/2027 <b id="nQualineo"></b></p>
+        <div class="mapa-controles">
+          <select id="selUnidadeQualineo" style="min-width:340px"></select>
+          <button class="chip chip-acao" id="btnAbrirDossieQualineo">Abrir dossiê →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= COMPARADOR ========================= -->
+<section id="secComparar">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Comparador</p>
+      <h2>Comparar unidades lado a lado</h2>
+      <p style="max-width:none">Dois modos: <b>entre unidades</b> — escolha primeiro o grupo (apoiadas, EBSERH ou QUALINEO) e compare de duas a quatro maternidades do grupo lado a lado, com a menor mortalidade destacada em cada indicador e a opção de incluir a <b>taxa agregada do grupo</b> como referência; ou <b>a mesma unidade entre anos</b>, marcando os anos desejados para ver a variação e a tendência de cada indicador.</p>
+    </div>
+    <div class="seg" id="segModoComp" style="margin-bottom:1rem">
+      <button data-modo="unidades" class="ativo">Entre unidades</button>
+      <button data-modo="anos">Mesma unidade entre anos</button>
+    </div>
+    <div id="compModoUnidades">
+      <div class="seg" id="segGrupoComp" style="margin-bottom:1rem">
+        <button data-grupo="apoiada" class="ativo">Maternidades apoiadas</button>
+        <button data-grupo="ebserh">Unidades EBSERH</button>
+        <button data-grupo="qualineo">QUALINEO 2026/2027</button>
+      </div>
+      <div class="comp-sel">
+        <select id="selAddComp" style="min-width:300px"></select>
+        <button class="chip" id="btnAddComp">+ adicionar</button>
+        <button class="chip" id="btnAddMedia" title="Inclui, como coluna de referência, a taxa agregada do grupo selecionado acima">+ agregado do grupo</button>
+        <select id="selAnoComp" aria-label="Ano da comparação"></select>
+        <div class="comp-chips" id="compChips"></div>
+      </div>
+      <div id="compConteudo"></div>
+    </div>
+    <div id="compModoAnos" hidden>
+      <div class="comp-sel">
+        <select id="selUnidadeEvo" style="min-width:320px"></select>
+        <div class="comp-chips" id="anosEvo"></div>
+      </div>
+      <div id="evoConteudo"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= COMPARATIVO ENTRE ANOS ========================= -->
+<section id="secComparativo">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Cenários</p>
+      <h2>Comparativo entre anos: dois mapas lado a lado</h2>
+      <p style="max-width:none">Escolha o indicador, o recorte e o nível territorial e compare dois anos da série: os dois mapas usam as mesmas faixas de cor (calculadas sobre os dois anos juntos), para que a mudança de tom signifique mudança real do indicador nas maternidades do painel.</p>
+    </div>
+    <div class="filtros-grid filtros-topo">
+      <label class="filtro" style="max-width:420px"><span>Indicador</span>
+        <select id="selIndComp2"></select></label>
+      <label class="filtro"><span>Território</span>
+        <select id="selRegiaoComp">
+          <option value="">Brasil</option>
+          <option>Norte</option><option>Nordeste</option><option>Centro-Oeste</option>
+          <option>Sudeste</option><option>Sul</option>
+        </select></label>
+      <label class="filtro"><span>Estado</span>
+        <select id="selUFComp"><option value="">Todo o Brasil</option></select></label>
+      <label class="filtro"><span>Detalhe do mapa</span>
+        <select id="selNivelComp">
+          <option value="uf" selected>Estados (UF)</option>
+          <option value="macro">Macrorregiões de saúde</option>
+          <option value="rs">Regiões de saúde</option>
+        </select></label>
+    </div>
+    <div class="grid-2">
+      <div class="card"><h3><select id="selAnoCompA" class="sel-ano-comp"></select></h3><div id="mapaCompA"></div></div>
+      <div class="card"><h3><select id="selAnoCompB" class="sel-ano-comp"></select></h3><div id="mapaCompB"></div></div>
+    </div>
+    <div class="card" style="margin-top:1.1rem">
+      <h4 class="titulo-legenda" id="tituloLegComp">—</h4>
+      <div class="legenda" id="legendaComp"></div>
+      <p class="fonte" id="fonteComp">Fonte: Ministério da Saúde - SIM (DO e DOFET) e SINASC, 2019-2025 · maternidades do painel · 2024 e 2025 preliminares · dados sujeitos a revisão.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PÁGINA DO DOSSIÊ (sobreposta) ========================= -->
+<div id="paginaDossie" class="pagina-dossie" hidden>
+  <div class="pd-topo">
+    <div class="wrap pd-topo-linha">
+      <button class="chip chip-acao" id="btnVoltarDossie">← Voltar ao painel</button>
+      <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center">
+        <select id="selUnidadePd" style="min-width:280px" aria-label="Trocar de maternidade"></select>
+        <button class="chip" id="btnPdfDossie" title="Imprimir ou salvar o dossiê em PDF">⬇ Baixar PDF</button>
+      </div>
+    </div>
+  </div>
+  <div class="wrap" id="dossieConteudo" style="padding:1.3rem 0 3rem"></div>
+</div>
+
+<div id="tipMapa" class="tip-mapa" hidden></div>
+
+<!-- ========================= MODAL DE GRÁFICO ========================= -->
+<div id="modalGrafico" class="modal-graf" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true">
+    <button class="modal-x" id="btnFecharModal" aria-label="Fechar">✕</button>
+    <h3 id="mgTitulo" style="padding-right:2.2rem">—</h3>
+    <p class="suave" id="mgSub" style="font-size:.84rem; margin-top:.2rem"></p>
+    <button id="btnBaixarPng" class="btn-baixar-png" title="Baixar este gráfico como imagem PNG">&#8595; Baixar PNG</button>
+    <div id="mgConteudo" style="margin-top:.9rem"></div>
+  </div>
+</div>
+
+<!-- ========================= PÁGINA DE METODOLOGIA (sobreposta) ========================= -->
+<div id="paginaMetodo" class="pagina-dossie" hidden>
+  <div class="pd-topo">
+    <div class="wrap pd-topo-linha">
+      <button class="chip chip-acao" id="btnVoltarMetodo">← Voltar ao painel</button>
+      <span class="eyebrow">Metodologia · fontes oficiais e cálculo de cada indicador</span>
+    </div>
+  </div>
+  <div class="wrap" id="metodoConteudo" style="padding:1.3rem 0 3rem"></div>
+</div>
+
+<footer>
+  <div class="wrap">
+    Painel de Mortalidade 2026 · Qualificação do Modelo de Gestão em Maternidades Estratégicas na Rede de Atenção à Saúde Materna e Neonatal ·
+    Coordenação de Ações Nacionais e de Cooperação em Saúde da Mulher, da Criança e do Adolescente · IFF/Fiocruz ·
+    SIM (DO e DOFET) e SINASC 2019–2025, 2024 e 2025 preliminares, dados sujeitos a revisão.
+    <img src="logos_institucionais.png" alt="IFF · Fiocruz · SUS · Ministério da Saúde" style="display:block; max-width:420px; width:100%; height:auto; margin:16px auto 0"/>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="dados_mortalidade.js"></script>
+<script src="painel_app.js"></script>
+</body>
+</html>
