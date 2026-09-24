@@ -194,6 +194,10 @@ for caminho, data_extracao in CSVS_IND:
             sec.setdefault(r["rotulo"], [None] * len(ANOS))[ANOS.index(ano)] = to_num(r["n"])
             extraido[cnes] = data_extracao
             n_lin += 1
+# unidades do recálculo de 11/09 cujas linhas foram substituídas em 23/09 pelo SIM das 27 UFs
+# (Pipeline_Python/corrige_extras_2026-09.py): óbitos neonatais de moradores de outras UFs
+CORRIGIDAS_EM = {"2077477": "2026-09-23", "7958838": "2026-09-23"}
+extraido.update({c: d for c, d in CORRIGIDAS_EM.items() if c in por_cnes})
 print(f"[3] {n_lin} linhas dos CSV long -> {len(por_cnes)} CNES")
 
 # nascidos vivos ausentes (unidade ainda não existia): denominadores ficam nulos
