@@ -23,7 +23,10 @@ from datetime import date
 BASE = os.path.dirname(os.path.abspath(__file__))
 PROJ = os.path.dirname(BASE)                                   # "Mortalidade Indicadores"
 DOCS = os.path.dirname(PROJ)                                   # "Documentos"
-CSV_IND = os.path.join(PROJ, "Pipeline_Python", "indicadores_recalculados.csv")
+# indicadores: o recálculo de 11/09 (117 unidades) + as unidades acrescentadas depois, cada
+# arquivo com a data em que o SIM foi extraído (vai para o campo extraidoEm da unidade)
+CSVS_IND = [(os.path.join(PROJ, "Pipeline_Python", "indicadores_recalculados.csv"), "2026-09-11"),
+            (os.path.join(PROJ, "Pipeline_Python", "indicadores_novas_2026-09.csv"), "2026-09-23")]
 LISTA_OFICIAL = os.path.join(PROJ, "lista_oficial_116.csv")    # LISTA MATERNIDADES POR GRUPO_09092026
 RELATORIO = os.path.join(PROJ, "Apresentacoes_Mortalidade_2026-09", "relatorio_geracao.csv")
 PAINEL_NV = os.path.join(DOCS, "Pojeto Apresentações NV_2026", "Painel_2026_Novo")   # leitura apenas
@@ -60,6 +63,16 @@ EXTRA_META = {
     "7958838": {"nome": "Hospital da Mulher do Recife", "uf": "PE",
                 "territorio": {"municipio": "Recife", "regiao_saude": "I REGIÃO DE SAÚDE",
                                "macro": "METROPOLITANA", "uf": "Pernambuco"}},
+    # pedido da coordenação em 23/09/2026 (lista da Brenda); territórios pela regionalização de jun/2026
+    "2453665": {"nome": "Maternidade Carmosina Coutinho", "uf": "MA",
+                "territorio": {"municipio": "Caxias", "regiao_saude": "CAXIAS",
+                               "macro": "MACRORREGIÃO LESTE", "uf": "Maranhão"}},
+    "3021114": {"nome": "Santa Casa de Misericórdia de Sobral", "uf": "CE",
+                "territorio": {"municipio": "Sobral", "regiao_saude": "5ª RS SOBRAL",
+                               "macro": "SOBRAL", "uf": "Ceará"}},
+    "2705982": {"nome": "Santa Casa de Franca", "uf": "SP",
+                "territorio": {"municipio": "Franca", "regiao_saude": "TRÊS COLINAS",
+                               "macro": "RRAS13", "uf": "São Paulo"}},
 }
 NOME_EXIBICAO = {"2025523": "Hospital das Clínicas da FAMEMA (complexo HCFAMEMA)"}
 
@@ -165,18 +178,23 @@ def conjuntos_de(tipo):
 
 # ----------------------------------------------------------------------------- 3. indicadores (CSV long)
 por_cnes = {}
+extraido = {}                       # cnes -> data da extração do SIM
 n_lin = 0
-with open(CSV_IND, encoding="utf-8") as fh:
-    for r in csv.DictReader(fh):
-        k = CHAVE.get((r["bloco"], r["secao"]))
-        if not k or ROTULOS_TAXA.match(r["rotulo"]):
-            continue
-        cnes = r["cnes"].zfill(7); ano = int(r["ano"])
-        bl = por_cnes.setdefault(cnes, {})
-        sec = bl.setdefault(k, {})
-        sec.setdefault(r["rotulo"], [None] * len(ANOS))[ANOS.index(ano)] = to_num(r["n"])
-        n_lin += 1
-print(f"[3] {n_lin} linhas do CSV long -> {len(por_cnes)} CNES")
+for caminho, data_extracao in CSVS_IND:
+    if not os.path.exists(caminho):
+        print(f"    [aviso] CSV de indicadores não encontrado, pulando: {os.path.basename(caminho)}"); continue
+    with open(caminho, encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            k = CHAVE.get((r["bloco"], r["secao"]))
+            if not k or ROTULOS_TAXA.match(r["rotulo"]):
+                continue
+            cnes = r["cnes"].zfill(7); ano = int(r["ano"])
+            bl = por_cnes.setdefault(cnes, {})
+            sec = bl.setdefault(k, {})
+            sec.setdefault(r["rotulo"], [None] * len(ANOS))[ANOS.index(ano)] = to_num(r["n"])
+            extraido[cnes] = data_extracao
+            n_lin += 1
+print(f"[3] {n_lin} linhas dos CSV long -> {len(por_cnes)} CNES")
 
 # nascidos vivos ausentes (unidade ainda não existia): denominadores ficam nulos
 for cnes, bl in por_cnes.items():
@@ -224,6 +242,7 @@ for cnes in sorted(por_cnes):
         "conjuntos": conjuntos_de(tipo),
         "tipoApoio": tipo,
         "oficial": cnes in oficial,
+        "extraidoEm": extraido.get(cnes, EXTRAIDO_EM),
         "lista": (rel or {}).get("lista", ""),
         "blocos": {k: [[rot, com_total(v)] for rot, v in sec.items()] for k, sec in por_cnes[cnes].items()},
     }
@@ -247,6 +266,9 @@ GEO_AJUSTES = {   # cnes: {"rs": id, "macro": id}
     "0000418": {"rs": 26010, "macro": 2607}, "2711613": {"rs": 26010, "macro": 2607}, "7958838": {"rs": 26010, "macro": 2607},
     "2430711": {"rs": 26009, "macro": 2605},                       # Petrolina: VIII Região de Saúde / Vale do S. Francisco e Araripe
     "0002232": {"macro": 2801}, "4099206": {"macro": 2801}, "5714397": {"macro": 2801},   # Sergipe: Macro Única
+    "2453665": {"rs": 21005, "macro": 2111},                       # Caxias/MA (códigos do município na base territorial)
+    "3021114": {"rs": 23011, "macro": 2309},                       # Sobral/CE
+    "2705982": {"rs": 35081, "macro": 3530},                       # Franca/SP (Três Colinas / RRAS13)
 }
 def _uf_da_malha(t):
     mm = re.search(r"-\s*([A-Z]{2})\s*$", t.get("nome", ""))

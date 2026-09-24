@@ -16,7 +16,7 @@ unidades (Leaflet/OpenStreetMap).
   filtros em cascata (território → estado), 5 blocos (visão geral, materna, fetal, perinatal,
   neonatal) e 38 indicadores; faixas por quintis recalculadas por recorte, tooltip com
   numerador/denominador e as maternidades de cada território; painel lateral com os totais da seleção.
-- **Mapa de unidades**: as 117 maternidades (Leaflet), coloridas por grupo (apoiadas, EBSERH,
+- **Mapa de unidades**: as 120 maternidades (Leaflet), coloridas por grupo (apoiadas, EBSERH,
   QUALINEO 2026/2027), com filtros, busca, resumo de 2025 no popup e pontos de contexto
   (estabelecimentos ≥480 partos/ano, SIH/AIH 2025).
 - **Dossiê da unidade**: página própria com ficha CNES e habilitações ativas (API oficial) e as
@@ -37,6 +37,11 @@ SIM (DO e DOFET) 2019–2025 e SINASC 2019–2025 (2024 e 2025 preliminares, dad
 revisão) · CNES (ficha via API de Dados Abertos; habilitações via serviço do site do CNES) ·
 lista oficial de maternidades por grupo de 09/09/2026 · malhas de macrorregiões e regiões de saúde
 (as mesmas do Painel NV).
+
+Unidades acrescentadas em 23/09/2026, a pedido da coordenação (fora da lista oficial de 09/09, marcadas
+como anexo): Maternidade Carmosina Coutinho (Caxias/MA, CNES 2453665), Santa Casa de Misericórdia de
+Sobral (CE, 3021114) e Santa Casa de Franca (SP, 2705982). Mesmas regras de cálculo; SIM extraído em
+23/09/2026 das 27 UFs (`Pipeline_Python/indicadores_novas_2026-09.csv`).
 
 ## Como atualizar
 
